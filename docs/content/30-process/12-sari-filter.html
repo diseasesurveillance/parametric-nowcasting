@@ -1,0 +1,104 @@
+---
+title: "Prepare SARI data"
+prerequisites:
+    - data/cleaned/clean_data_srag_epiweek_delay_table_PR.csv
+targets:
+    - data/processed/sari_41002_20090614_20091122.rds
+---
+
+
+
+<p>Filter SARI data for the dates of interest and prepare for analysis.</p>
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(aweek)
+library(tidyr)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+
+sari &lt;- path_cleaned |&gt;
+    file.path(&quot;clean_data_srag_epiweek_delay_table_PR.csv&quot;) |&gt;
+    readr::read_csv()</code></pre>
+<pre><code>#&gt; Rows: 10373 Columns: 32</code></pre>
+<pre><code>#&gt; ── Column specification ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#&gt; Delimiter: &quot;,&quot;
+#&gt; dbl (32): epiweek, epiyear, regionalsaude, Notifications, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9...
+#&gt; 
+#&gt; ℹ Use `spec()` to retrieve the full column specification for this data.
+#&gt; ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<pre class="r"><code>names(sari)</code></pre>
+<pre><code>#&gt;  [1] &quot;epiweek&quot;                  &quot;epiyear&quot;                  &quot;regionalsaude&quot;           
+#&gt;  [4] &quot;Notifications&quot;            &quot;d0&quot;                       &quot;d1&quot;                      
+#&gt;  [7] &quot;d2&quot;                       &quot;d3&quot;                       &quot;d4&quot;                      
+#&gt; [10] &quot;d5&quot;                       &quot;d6&quot;                       &quot;d7&quot;                      
+#&gt; [13] &quot;d8&quot;                       &quot;d9&quot;                       &quot;d10&quot;                     
+#&gt; [16] &quot;d11&quot;                      &quot;d12&quot;                      &quot;d13&quot;                     
+#&gt; [19] &quot;d14&quot;                      &quot;d15&quot;                      &quot;d16&quot;                     
+#&gt; [22] &quot;d17&quot;                      &quot;d18&quot;                      &quot;d19&quot;                     
+#&gt; [25] &quot;d20&quot;                      &quot;d21&quot;                      &quot;d22&quot;                     
+#&gt; [28] &quot;d23&quot;                      &quot;d24&quot;                      &quot;d25&quot;                     
+#&gt; [31] &quot;d26&quot;                      &quot;Notifications_within_26w&quot;</code></pre>
+</div>
+<div id="process-data" class="section level2">
+<h2>Process data</h2>
+<ul>
+<li>Standardise variable names,</li>
+<li>create the date of the week and year,</li>
+<li>filter a region of interest <span class="math inline">\(41002\)</span> and</li>
+<li>filter dates of interest from <code>2009-06-14</code> to <code>2009-11-22</code>.</li>
+</ul>
+<pre class="r"><code>date_period &lt;- as.Date(c(&quot;2009-06-14&quot;, &quot;2009-11-22&quot;))
+sari_41002 &lt;- sari |&gt;
+    rename_with(tolower) |&gt;
+    mutate(date = get_date(week = epiweek, year = epiyear, start = 7)) |&gt;
+    filter(regionalsaude == 41002, date &gt;= date_period[1], date &lt;= date_period[2]) |&gt;
+    select(- c(&quot;epiweek&quot;, &quot;epiyear&quot;, &quot;regionalsaude&quot;, &quot;notifications_within_26w&quot;)) |&gt;
+    rename_with(function(x) gsub(&quot;d&quot;, &quot;delay&quot;, x), d0:d26) |&gt;
+    relocate(date) |&gt;
+    relocate(cases_baseline = notifications, .after = last_col())</code></pre>
+<p>Compute the cumulative number of cases.</p>
+<pre class="r"><code>D &lt;- 26
+sari_41002[, 2:(D+2)] &lt;- t(apply(as.matrix(sari_41002[, 2:(D+2)]), 1, cumsum))
+sari_41002</code></pre>
+<pre><code>#&gt; # A tibble: 24 × 29
+#&gt;    date       delay0 delay1 delay2 delay3 delay4 delay5 delay6 delay7 delay8 delay9 delay10 delay11
+#&gt;    &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2009-06-14      0      3      3      3      3      3      3      6      7      7       7       8
+#&gt;  2 2009-06-21      2      4      5      7      7      9     12     15     15     16      16      16
+#&gt;  3 2009-06-28      2     13     17     21     22     30     35     39     39     41      41      41
+#&gt;  4 2009-07-05     14     16     17     18     19     22     23     25     26     26      27      27
+#&gt;  5 2009-07-12      2     11     11     25     39     47     53     56     58     58      58      58
+#&gt;  6 2009-07-19      2     18     91    154    179    198    204    207    207    207     209     209
+#&gt;  7 2009-07-26     32    329    463    519    550    559    567    572    575    578     579     581
+#&gt;  8 2009-08-02    272    563    749    932   1025   1061   1080   1088   1094   1102    1109    1140
+#&gt;  9 2009-08-09    183    549    767    893    974   1050   1071   1091   1112   1119    1132    1146
+#&gt; 10 2009-08-16    145    417    510    573    643    667    681    699    738    748     757     761
+#&gt; # ℹ 14 more rows
+#&gt; # ℹ 16 more variables: delay12 &lt;dbl&gt;, delay13 &lt;dbl&gt;, delay14 &lt;dbl&gt;, delay15 &lt;dbl&gt;, delay16 &lt;dbl&gt;,
+#&gt; #   delay17 &lt;dbl&gt;, delay18 &lt;dbl&gt;, delay19 &lt;dbl&gt;, delay20 &lt;dbl&gt;, delay21 &lt;dbl&gt;, delay22 &lt;dbl&gt;,
+#&gt; #   delay23 &lt;dbl&gt;, delay24 &lt;dbl&gt;, delay25 &lt;dbl&gt;, delay26 &lt;dbl&gt;, cases_baseline &lt;dbl&gt;</code></pre>
+</div>
+<div id="save-processed-data" class="section level2">
+<h2>Save processed data</h2>
+<pre class="r"><code>saveRDS(sari_41002, file.path(path_processed, &quot;sari_41002_20090614_20091122.rds&quot;))</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   0.706   0.326   0.669</code></pre>
+</div>

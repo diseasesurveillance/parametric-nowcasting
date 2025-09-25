@@ -1,0 +1,66 @@
+---
+title: "Exploratory analysis of SARI reported cases"
+prerequisites:
+    - data/processed/sari_41002_20090614_20091122.rds
+targets:
+    - data/figures/sari_reported_cases.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+
+sari <- readRDS(file.path(path_processed, "sari_41002_20090614_20091122.rds"))
+sari
+```
+
+## Convert to long format
+
+Convert data to long format and filter with observed data by the last available date.
+
+```{r}
+sari_long <- sari |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Visualize cumulative reported cases
+
+```{r, fig.height = 4.5}
+p <- plot_reported(sari_long, maxdelay = 26) +
+    labs(x = TeX("Delay (weeks)"))
+p
+ggsave(file.path(path_figures, "sari_reported_cases.png"), p,
+       width = 8, height = 4.5, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

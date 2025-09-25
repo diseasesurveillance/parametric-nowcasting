@@ -1,0 +1,175 @@
+---
+title: "Test non-parametric model"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cmdstanr)
+library(bayesplot)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_models <- file.path(path_src, "models")
+
+source(file.path(path_src, "40-simulate.R"))
+
+model <- cmdstan_model(file.path(path_models, "nonparam.stan"))
+```
+
+## Fully reported scenario
+
+### Setting
+
+```{r}
+# data
+alpha_increase_seq_1 <- seq(10, 750, by = 30)
+alpha_decrease_seq_1 <- seq(750, 10, by = -30)
+alpha_lamb <-  c(rep(10,5), alpha_increase_seq_1 + rnorm(alpha_increase_seq_1,10,10),
+                alpha_decrease_seq_1 + rnorm(alpha_decrease_seq_1,10,10),
+                rep(10,5))
+beta_lamb <- 0.5
+T <- 60
+D <- 15;
+```
+
+### Simulation
+
+```{r}
+args_nonparam_fr <- list(
+  data = list(
+    alpha_lamb = alpha_lamb,
+    beta_lamb  = beta_lamb,
+    T       = T,
+    date_start = as.Date("2024-01-01"),
+    D = D
+  ),
+  q_model = list(
+    method        = "nonparam",
+    method_params = list(b = 0.7, phi = 0.9)
+  )
+)
+
+nonparam_fr <- simulateData(args_nonparam_fr)
+plot(nonparam_fr$q, col = "red", pch = 19, type = "b", ylim = c(0,1))
+```
+
+### Model fitting
+
+```{r}
+ind <- 40
+stan_data <- list(T = ind, D = nonparam_fr$D, Y = nonparam_fr$case_reported_cumulated[1:ind, ])
+
+test <- model$sample(
+    data = stan_data,
+    iter_sampling = 3000,
+    iter_warmup = 2000,
+    chains = 1,
+    refresh = 0,
+    thin = 1)
+varnames <- test$summary()$variable
+
+param_true <- tibble(
+    parameter = grep("^lambda\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_fr$lambda[1:ind]
+)
+mcmc_areas(test$draws("lambda"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^p\\[.+\\]$", varnames, value = TRUE),
+    x = c(nonparam_fr$q[1], diff(nonparam_fr$q))
+)
+mcmc_areas(test$draws("p"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^q\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_fr$q
+)
+mcmc_areas(test$draws("q"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^N\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_fr$case_true[1:ind, 1]
+)
+mcmc_areas(test$draws("N"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+```
+
+## Non-fully reported scenario
+
+### Simulation
+
+```{r}
+args_nonparam_nfr <- list(
+  data = list(
+    alpha_lamb = alpha_lamb,
+    beta_lamb  = beta_lamb,
+    T       = T,
+    date_start = as.Date("2024-01-01"),
+    D = D
+  ),
+  q_model = list(
+    method        = "nonparam",
+    method_params = list(b = 0.15, phi = 0.9)
+  )
+)
+nonparam_nfr <- simulateData(args_nonparam_nfr)
+plot(nonparam_nfr$q, col = "red", pch = 19, type = "b", ylim = c(0,1))
+```
+
+### Model fitting
+
+```{r}
+ind <- 40
+stan_data <- list(T = ind, D = 15, Y = nonparam_nfr$case_reported_cumulated[1:ind, ])
+
+test <- model$sample(
+    data = stan_data,
+    iter_sampling = 3000,
+    iter_warmup = 2000,
+    chains = 1,
+    refresh = 0,
+    thin = 1)
+varnames <- test$summary()$variable
+
+param_true <- tibble(
+    parameter = grep("^lambda\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_nfr$lambda[1:ind]
+)
+mcmc_areas(test$draws("lambda"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^p\\[.+\\]$", varnames, value = TRUE),
+    x = c(nonparam_nfr$q[1], diff(nonparam_nfr$q))
+)
+mcmc_areas(test$draws("p"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^q\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_nfr$q
+)
+mcmc_areas(test$draws("q"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+
+param_true <- tibble(
+    parameter = grep("^N\\[.+\\]$", varnames, value = TRUE),
+    x = nonparam_nfr$case_true[1:ind, 1]
+)
+mcmc_areas(test$draws("N"), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = "red", size = 1)
+```

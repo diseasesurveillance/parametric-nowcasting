@@ -1,0 +1,113 @@
+---
+title: "HusO104: Visualize nowcasting results by model and reference date"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/modelled/huso104_20110512_20110606_mcmc.rds
+targets:
+    - data/figures/huso104_nowcast.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(cmdstanr)</code></pre>
+<pre><code>#&gt; CmdStan path set to: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; This is cmdstanr version 0.9.0</code></pre>
+<pre><code>#&gt; - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr</code></pre>
+<pre><code>#&gt; - CmdStan path: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; - CmdStan version: 2.36.0</code></pre>
+<pre class="r"><code>path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_modelled &lt;- file.path(path_data, &quot;modelled&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+source(file.path(path_src, &quot;50-modelling.R&quot;))
+source(file.path(path_src, &quot;60-summarise.R&quot;))
+
+huso &lt;- readRDS(file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))
+huso_mcmc &lt;- readRDS(file.path(path_modelled, &quot;huso104_20110512_20110606_mcmc.rds&quot;))
+names(huso_mcmc)</code></pre>
+<pre><code>#&gt; [1] &quot;2011-05-25&quot; &quot;2011-05-28&quot; &quot;2011-05-31&quot; &quot;2011-06-03&quot; &quot;2011-06-06&quot;</code></pre>
+</div>
+<div id="processing-results" class="section level2">
+<h2>Processing results</h2>
+<p>Obtain summarised date for reported cases and baseline cases, and summarise the nowcasting
+results from the mcmc samples.</p>
+<pre class="r"><code>huso_summary &lt;- reporcases_periods(huso, names(huso_mcmc))
+huso_summary</code></pre>
+<pre><code>#&gt; # A tibble: 100 × 4
+#&gt;    date_end   date       cases_reported cases_baseline
+#&gt;    &lt;chr&gt;      &lt;date&gt;              &lt;dbl&gt;          &lt;dbl&gt;
+#&gt;  1 2011-05-25 2011-05-12              1              2
+#&gt;  2 2011-05-25 2011-05-13              4              6
+#&gt;  3 2011-05-25 2011-05-14              0              1
+#&gt;  4 2011-05-25 2011-05-15              3              9
+#&gt;  5 2011-05-25 2011-05-16              2             12
+#&gt;  6 2011-05-25 2011-05-17              7             17
+#&gt;  7 2011-05-25 2011-05-18              3             19
+#&gt;  8 2011-05-25 2011-05-19             11             29
+#&gt;  9 2011-05-25 2011-05-20              9             35
+#&gt; 10 2011-05-25 2011-05-21              9             66
+#&gt; # ℹ 90 more rows</code></pre>
+<pre class="r"><code>huso_nowcast &lt;- nowcast_periods(huso_mcmc, date_by = &quot;1 day&quot;)
+huso_nowcast</code></pre>
+<pre><code>#&gt; # A tibble: 400 × 6
+#&gt;    date_end   model    date       median lower upper
+#&gt;    &lt;date&gt;     &lt;fct&gt;    &lt;date&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1 2011-05-25 nonparam 2011-05-12      0     0     2
+#&gt;  2 2011-05-25 nonparam 2011-05-13      1     0     5
+#&gt;  3 2011-05-25 nonparam 2011-05-14      0     0     1
+#&gt;  4 2011-05-25 nonparam 2011-05-15      1     0     5
+#&gt;  5 2011-05-25 nonparam 2011-05-16      1     0     4
+#&gt;  6 2011-05-25 nonparam 2011-05-17      7     2    18
+#&gt;  7 2011-05-25 nonparam 2011-05-18      4     0    14
+#&gt;  8 2011-05-25 nonparam 2011-05-19     27    10    68
+#&gt;  9 2011-05-25 nonparam 2011-05-20     36    12   102
+#&gt; 10 2011-05-25 nonparam 2011-05-21     77    25   239
+#&gt; # ℹ 390 more rows</code></pre>
+</div>
+<div id="visualize-nowcasting-per-reference-date" class="section level2">
+<h2>Visualize nowcasting per reference date</h2>
+<pre class="r"><code>model_labels &lt;- c(
+  &quot;nonparam&quot;  = &quot;bold(&#39;M1: Non-parametric&#39;~q[d])&quot;,
+  &quot;gom&quot;       = &quot;bold(&#39;M2: Parametric&#39;~q(d))&quot;,
+  &quot;gom_rw1&quot;   = &quot;bold(&#39;M3:&#39;~q[t](d)~&#39;with random walks&#39;)&quot;,
+  &quot;gom_ou&quot;    = &quot;bold(&#39;M4:&#39;~q[t](d)~&#39;with OU processes&#39;)&quot;
+)
+p &lt;- plot_nowcast(huso_nowcast, huso_summary, model_labels = model_labels)</code></pre>
+<pre><code>#&gt; Warning: A numeric `legend.position` argument in `theme()` was deprecated in ggplot2 3.5.0.
+#&gt; ℹ Please use the `legend.position.inside` argument of `theme()` instead.
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>p</code></pre>
+<pre><code>#&gt; Warning: Combining variables of class &lt;Date&gt; and &lt;character&gt; was deprecated in ggplot2 3.4.0.
+#&gt; ℹ Please ensure your variables are compatible before plotting (location: `combine_vars()`)
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/34-huso-nowcast-per-model_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_nowcast.png&quot;), p,
+       width = 8, height = 6, dpi = 300)</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;  13.007   1.113  16.252</code></pre>
+</div>

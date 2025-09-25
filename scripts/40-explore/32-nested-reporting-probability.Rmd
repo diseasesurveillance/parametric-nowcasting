@@ -1,0 +1,75 @@
+---
+title: "Nested reported probabilties"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+```
+
+## Define nested and shifted functions
+
+```{r}
+qexp_nested <- function(alpha, b1, b2) {
+    function(delay) 1 - alpha * exp(-b1 * delay) -
+        (1 - alpha) * exp(-b2 * delay)
+}
+
+
+qexp_nested_shifted <- function(alpha, b1, b2) {
+    function(delay) 1 - alpha * exp(-b1 * delay) -
+        (1 - alpha) * exp(-b2 * pmax(delay - 10, 0))
+}
+```
+
+## Visualize composed functions
+
+```{r, fig.height = 4}
+df <- data.frame(delay = seq(0, 15, length = 1000)) |>
+    mutate(q1 = qexp(0, 1)(delay),
+           q2 = qexp(0, 0.4)(delay),
+           q3 = qexp_nested(0.7, 1, 0.4)(delay),
+           q4 = qexp_nested_shifted(0.8, 1, 0.4)(delay))
+
+p <- ggplot(df) +
+    geom_line(aes(delay, q1, color = "(a) Exponential with quick convergence")) +
+    geom_line(aes(delay, q2, color = "(b) Exponential with slow convergence")) +
+    geom_line(aes(delay, q3, color = "(c) Nested function"), linetype = 2, linewidth = 0.7) +
+    geom_line(aes(delay, q4, color = "(d) Shifted nested function"), linetype = 4, linewidth = 0.7) +
+    labs(color = "", y = "Cumulative reporting probability") +
+    theme_bw(9) +
+    theme(legend.position = c(0.7, 0.35))
+p
+
+ggsave(file.path(path_figures, "qd_nested_functions.png"), p,
+      width = 6, height = 4, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```

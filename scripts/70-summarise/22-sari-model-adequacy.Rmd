@@ -1,0 +1,86 @@
+---
+title: "SARI: Visualize fitted reported cases"
+prerequisites:
+    - data/processed/sari_41002_20090614_20091122.rds
+    - data/modelled/sari_41002_20090614_20091122_mcmc.rds
+targets:
+    - data/figures/sari_reported_fitted_curves.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cmdstanr)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_processed <- file.path(path_data, "processed")
+path_modelled <- file.path(path_data, "modelled")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+source(file.path(path_src, "50-modelling.R"))
+source(file.path(path_src, "60-summarise.R"))
+
+sari <- readRDS(file.path(path_processed, "sari_41002_20090614_20091122.rds"))
+sari
+sari_mcmc <- readRDS(file.path(path_modelled, "sari_41002_20090614_20091122_mcmc.rds"))
+names(sari_mcmc)
+```
+
+## Sari data in long format
+
+```{r}
+sari_long <- sari |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Predicted mean in long format
+
+We select the last period which include all the data, and obtain predictive mean for all
+models in long format data frame.
+
+```{r}
+# select model for date
+index <- length(sari_mcmc)
+first_date <- min(sari$date)
+last_date <- as.Date(names(sari_mcmc)[index])
+dates <- seq(first_date, last_date, by = "1 week")
+
+# prediction in long format
+pred_long <- predmean_df(sari_mcmc[[index]], delays = 0:26, dates, "exponential")
+pred_long
+```
+
+## Visualize curves
+
+```{r, fig.height = 5.5}
+p <- plot_predmean(sari_long, pred_long)
+p
+ggsave(file.path(path_figures, "sari_reported_fitted_curves.png"), p,
+     width = 8, height = 5.5, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

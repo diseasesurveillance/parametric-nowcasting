@@ -1,0 +1,33 @@
+---
+title: "Time-varying paramatric nowcasting"
+author:
+    - name: "Erick A. Chacón-Montalván"
+      link: "https://erickchacon.gitlab.io"
+    - name: "Yang Xiao"
+      link: "https://github.com/YangX-Bit"
+    - name: "Paula Moraga"
+      link: "https://www.paulamoraga.com/"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+This web presents all the analysis performed in the paper denominated "*Bayesian
+Nowcasting for Delay Adjustments Using Parametric Time-Varying Functions of Cumulative
+Reporting Probability*".
+
+Explore the content of the web using the available sidebar. The content is divided in 5 main sections:
+
+- Data extraction
+- Data processing
+- Data exploration
+- Data modelling
+- Summarise results
+
+The scripts are used to render the web:
+[https://erickchacon.gitlab.io/parametric-nowcasting](https://erickchacon.gitlab.io/parametric-nowcasting).
+

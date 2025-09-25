@@ -1,0 +1,171 @@
+---
+title: "HusO104: Visualize nowcasting results by reference date with OU model"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/modelled/huso104_20110512_20110606_mcmc.rds
+targets:
+    - data/figures/huso104_nowcast_ou_95.png
+    - data/figures/huso104_nowcast_ou_70.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(cmdstanr)</code></pre>
+<pre><code>#&gt; CmdStan path set to: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; This is cmdstanr version 0.9.0</code></pre>
+<pre><code>#&gt; - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr</code></pre>
+<pre><code>#&gt; - CmdStan path: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; - CmdStan version: 2.36.0</code></pre>
+<pre class="r"><code>path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_modelled &lt;- file.path(path_data, &quot;modelled&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+source(file.path(path_src, &quot;50-modelling.R&quot;))
+source(file.path(path_src, &quot;60-summarise.R&quot;))
+
+huso &lt;- readRDS(file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))
+huso_mcmc &lt;- readRDS(file.path(path_modelled, &quot;huso104_20110512_20110606_mcmc.rds&quot;))
+names(huso_mcmc)</code></pre>
+<pre><code>#&gt; [1] &quot;2011-05-25&quot; &quot;2011-05-28&quot; &quot;2011-05-31&quot; &quot;2011-06-03&quot; &quot;2011-06-06&quot;</code></pre>
+</div>
+<div id="processing-results" class="section level2">
+<h2>Processing results</h2>
+<p>Obtain summarised date for reported cases and baseline cases, and summarise the nowcasting
+results from the mcmc samples at 95% and 70% credible level.</p>
+<pre class="r"><code># empirical summaries
+huso_summary &lt;- reporcases_periods(huso, names(huso_mcmc))
+huso_summary</code></pre>
+<pre><code>#&gt; # A tibble: 100 × 4
+#&gt;    date_end   date       cases_reported cases_baseline
+#&gt;    &lt;chr&gt;      &lt;date&gt;              &lt;dbl&gt;          &lt;dbl&gt;
+#&gt;  1 2011-05-25 2011-05-12              1              2
+#&gt;  2 2011-05-25 2011-05-13              4              6
+#&gt;  3 2011-05-25 2011-05-14              0              1
+#&gt;  4 2011-05-25 2011-05-15              3              9
+#&gt;  5 2011-05-25 2011-05-16              2             12
+#&gt;  6 2011-05-25 2011-05-17              7             17
+#&gt;  7 2011-05-25 2011-05-18              3             19
+#&gt;  8 2011-05-25 2011-05-19             11             29
+#&gt;  9 2011-05-25 2011-05-20              9             35
+#&gt; 10 2011-05-25 2011-05-21              9             66
+#&gt; # ℹ 90 more rows</code></pre>
+<pre class="r"><code># vertical windows per date
+huso_aux &lt;- tibble(date_end = names(huso_mcmc)) |&gt;
+    mutate(reference = as.Date(date_end) - lubridate::days(15))
+
+# nowcasting
+huso_nowcast_95 &lt;- nowcast_periods(huso_mcmc, date_by = &quot;1 day&quot;, alpha = 0.05) |&gt;
+    filter(model == &quot;gom_ou&quot;)
+huso_nowcast_95</code></pre>
+<pre><code>#&gt; # A tibble: 100 × 6
+#&gt;    date_end   model  date         mean lower upper
+#&gt;    &lt;date&gt;     &lt;fct&gt;  &lt;date&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1 2011-05-25 gom_ou 2011-05-12  0.794     0     5
+#&gt;  2 2011-05-25 gom_ou 2011-05-13 15.9       0    92
+#&gt;  3 2011-05-25 gom_ou 2011-05-14  0.967     0     6
+#&gt;  4 2011-05-25 gom_ou 2011-05-15 16.0       0    93
+#&gt;  5 2011-05-25 gom_ou 2011-05-16  8.17      0    47
+#&gt;  6 2011-05-25 gom_ou 2011-05-17 46.5       5   214
+#&gt;  7 2011-05-25 gom_ou 2011-05-18 18.0       1    85
+#&gt;  8 2011-05-25 gom_ou 2011-05-19 65.7       9   266
+#&gt;  9 2011-05-25 gom_ou 2011-05-20 69.0       7   327
+#&gt; 10 2011-05-25 gom_ou 2011-05-21 79.0       6   388
+#&gt; # ℹ 90 more rows</code></pre>
+<pre class="r"><code>huso_nowcast_70 &lt;- nowcast_periods(huso_mcmc, date_by = &quot;1 day&quot;, alpha = 0.3) |&gt;
+    filter(model == &quot;gom_ou&quot;)
+huso_nowcast_70</code></pre>
+<pre><code>#&gt; # A tibble: 100 × 6
+#&gt;    date_end   model  date         mean lower upper
+#&gt;    &lt;date&gt;     &lt;fct&gt;  &lt;date&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1 2011-05-25 gom_ou 2011-05-12  0.794     0     1
+#&gt;  2 2011-05-25 gom_ou 2011-05-13 15.9       1    18
+#&gt;  3 2011-05-25 gom_ou 2011-05-14  0.967     0     1
+#&gt;  4 2011-05-25 gom_ou 2011-05-15 16.0       1    20
+#&gt;  5 2011-05-25 gom_ou 2011-05-16  8.17      0    11
+#&gt;  6 2011-05-25 gom_ou 2011-05-17 46.5      11    70
+#&gt;  7 2011-05-25 gom_ou 2011-05-18 18.0       3    27
+#&gt;  8 2011-05-25 gom_ou 2011-05-19 65.7      18   103
+#&gt;  9 2011-05-25 gom_ou 2011-05-20 69.0      14   108
+#&gt; 10 2011-05-25 gom_ou 2011-05-21 79.0      14   126
+#&gt; # ℹ 90 more rows</code></pre>
+<pre class="r"><code>huso_nowcast_50 &lt;- nowcast_periods(huso_mcmc, date_by = &quot;1 day&quot;, alpha = 0.5) |&gt;
+    filter(model == &quot;gom_ou&quot;)
+huso_nowcast_50</code></pre>
+<pre><code>#&gt; # A tibble: 100 × 6
+#&gt;    date_end   model  date         mean lower upper
+#&gt;    &lt;date&gt;     &lt;fct&gt;  &lt;date&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1 2011-05-25 gom_ou 2011-05-12  0.794     0     1
+#&gt;  2 2011-05-25 gom_ou 2011-05-13 15.9       2    11
+#&gt;  3 2011-05-25 gom_ou 2011-05-14  0.967     0     1
+#&gt;  4 2011-05-25 gom_ou 2011-05-15 16.0       2    12
+#&gt;  5 2011-05-25 gom_ou 2011-05-16  8.17      1     7
+#&gt;  6 2011-05-25 gom_ou 2011-05-17 46.5      14    48
+#&gt;  7 2011-05-25 gom_ou 2011-05-18 18.0       5    19
+#&gt;  8 2011-05-25 gom_ou 2011-05-19 65.7      24    73
+#&gt;  9 2011-05-25 gom_ou 2011-05-20 69.0      20    73
+#&gt; 10 2011-05-25 gom_ou 2011-05-21 79.0      19    82
+#&gt; # ℹ 90 more rows</code></pre>
+</div>
+<div id="visualize-nowcasting-per-reference-date-95" class="section level2">
+<h2>Visualize nowcasting per reference date 95%</h2>
+<pre class="r"><code>p &lt;- plot_nowcast(huso_nowcast_95, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = &quot;gray50&quot;) +
+    theme(legend.position = c(0.88, 0.24))</code></pre>
+<pre><code>#&gt; Warning: A numeric `legend.position` argument in `theme()` was deprecated in ggplot2 3.5.0.
+#&gt; ℹ Please use the `legend.position.inside` argument of `theme()` instead.
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>p</code></pre>
+<pre><code>#&gt; Warning: Combining variables of class &lt;Date&gt; and &lt;character&gt; was deprecated in ggplot2 3.4.0.
+#&gt; ℹ Please ensure your variables are compatible before plotting (location: `combine_vars()`)
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/44-huso-nowcast-ou_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_nowcast_ou_95.png&quot;), p,
+       width = 8, height = 4, dpi = 300)</code></pre>
+</div>
+<div id="visualize-nowcasting-per-reference-date-70" class="section level2">
+<h2>Visualize nowcasting per reference date 70%</h2>
+<pre class="r"><code>p &lt;- plot_nowcast(huso_nowcast_70, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = &quot;gray50&quot;) +
+    theme(legend.position = c(0.88, 0.24))
+p</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/44-huso-nowcast-ou_files/figure-html/unnamed-chunk-4-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_nowcast_ou_70.png&quot;), p,
+       width = 8, height = 4, dpi = 300)</code></pre>
+</div>
+<div id="visualize-nowcasting-per-reference-date-50" class="section level2">
+<h2>Visualize nowcasting per reference date 50%</h2>
+<pre class="r"><code>p &lt;- plot_nowcast(huso_nowcast_50, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = &quot;gray50&quot;) +
+    theme(legend.position = c(0.88, 0.24))
+p</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/44-huso-nowcast-ou_files/figure-html/unnamed-chunk-5-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_nowcast_ou_50.png&quot;), p,
+       width = 8, height = 4, dpi = 300)</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;  15.570   1.150  23.021</code></pre>
+</div>

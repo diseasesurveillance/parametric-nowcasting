@@ -1,0 +1,63 @@
+---
+title: "Prepare HusO104 data"
+prerequisites:
+    - data/cleaned/husO104_tri_cumu.csv
+targets:
+    - data/processed/huso104_20110512_20110606.rds
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+Filter HusO104 data for the dates of interest and prepare for analysis.
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+
+huso <- path_cleaned |>
+    file.path("husO104_tri_cumu.csv") |>
+    readr::read_csv() |>
+    as_tibble() |>
+    rename(date = `...1`)
+names(huso)
+```
+
+## Process data
+
+- Filter dates of interest from `2011-05-12` to `2011-06-06`.
+
+```{r}
+date_period <- as.Date(c("2011-05-12", "2011-06-06"))
+huso <- huso |>
+    filter(date >= date_period[1], date <= date_period[2]) |>
+    mutate(cases_baseline = delay15)
+huso
+```
+
+## Save processed data
+
+```{r}
+saveRDS(huso, file.path(path_processed, "huso104_20110512_20110606.rds"))
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

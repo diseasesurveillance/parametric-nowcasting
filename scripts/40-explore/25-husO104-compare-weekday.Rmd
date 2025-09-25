@@ -1,0 +1,124 @@
+---
+title: "HusO104: Day of week analysis"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+targets:
+    - data/figures/huso104_day_of_week.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+Simply analysis to test if week of day is significantly import in this application.
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+```
+
+## Convert to long format
+
+Convert data to long format and filter with observed data by the last available date.
+
+```{r}
+huso_long <- huso |>
+    select(-cases_baseline) |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Fit Gompertz curves
+
+We will compare the Gompertz growth curves assuming a time-invariant
+reporting probability in the period of time between `2011-05-12` and `2011-06-01`.
+
+```{r}
+# prepare the data to train
+somedates <- seq(as.Date("2011-05-12"), as.Date("2011-06-01"), "1 day")
+df_train <- filter(huso_long, date %in% somedates) |>
+    mutate(weekday = factor(weekdays(date)), date = factor(date))
+df_fit <- data.frame(delay = seq(0, max(df_train$delay), length = 100))
+
+# initial values
+max_cases <- group_by(df_train, date) |>
+    summarise(cases = max(cases)) |>
+    pull(cases)
+
+# fit models
+mod_gomp <- nls(
+    cases ~ exp(logN[date]) * exp(logphi*exp(-b * delay)),
+    data = df_train,
+    start = list(b = 0.5, logphi = log(0.05), logN = log(max_cases))
+)
+mod_gomp
+
+mod_gomp_weekday <- nls(
+    cases ~ exp(logN[date]) * exp(logphi*exp(-b[weekday] * delay)),
+    data = df_train,
+    start = list(b = rep(0.5, 7), logphi = log(0.05), logN = log(max_cases))
+)
+mod_gomp_weekday
+
+# summarise
+list(Constant = mod_gomp, Weekday = mod_gomp_weekday) |>
+    sapply(function(x) c(AIC = AIC(x), BIC = BIC(x), SSE = deviance(x))) |>
+    data.frame()
+```
+
+## Visualize fitted curves
+
+Let's obtain the curves with the estimated parameter for each model.
+
+```{r}
+df_train <- df_train |>
+    mutate(pred_const = predict(mod_gomp), pred_weekday = predict(mod_gomp_weekday))
+
+```
+
+Visualize the estimated theoretical curves using the model constant and with
+day-of-effects.
+
+```{r, fig.height = 4.5}
+custom_date <- function(x) paste(x, weekdays(as.Date(x), TRUE), sep = ": ")
+p <- plot_reported(df_train, maxdelay = 15) +
+    geom_line(aes(delay, pred_const, color = "Constant"), size = rel(0.5)) +
+    geom_line(aes(delay, pred_weekday, color = "Day-of-week"), size = rel(0.5)) +
+    facet_wrap(~ date, scales = "free_y", ncol = 7, labeller = labeller(date = custom_date)) +
+    labs(color = NULL) +
+    theme(
+          legend.position = "bottom",
+          legend.background = element_rect(fill = "transparent")
+    )
+p
+ggsave(file.path(path_figures, "huso104_day_of_week.png"), p,
+       width = 8, height = 4.5, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```

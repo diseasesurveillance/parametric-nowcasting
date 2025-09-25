@@ -1,0 +1,124 @@
+---
+title: "HusO104: Compare growth curves"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+targets:
+    - data/figures/huso104_qd_comparison.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+```
+
+## Convert to long format
+
+Convert data to long format and filter with observed data by the last available date.
+
+```{r}
+huso_long <- huso |>
+    select(-cases_baseline) |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Fit Exponential and Gompertz curves
+
+We will compare the exponential and Gompertz growth curves assuming a time-invariant
+reporting probability in the period of time between `2009-07-19` and `2009-09-06`.
+
+```{r}
+# prepare the data to train
+somedates <- seq(as.Date("2011-05-20"), as.Date("2011-05-27"), "1 day")
+df_train <- filter(huso_long, date %in% somedates) |>
+    mutate(date = factor(date))
+df_fit <- data.frame(delay = seq(0, max(df_train$delay), length = 100))
+
+# initial values
+max_cases <- group_by(df_train, date) |>
+    summarise(cases = max(cases)) |>
+    pull(cases)
+
+# fit models
+mod_gomp <- nls(
+    cases ~ exp(logN[date]) * exp(logphi*exp(-b * delay)),
+    data = df_train,
+    start = list(b = 0.5, logphi = log(0.05), logN = log(max_cases))
+)
+mod_gomp
+mod_exp <- nls(
+    cases ~ exp(logN[date]) * (1 - exp(-b * delay)),
+    data = df_train,
+    start = list(b = 0.5, logN = log(max_cases))
+)
+mod_exp
+
+# summarise
+list(Exponential = mod_exp, Gompertz = mod_gomp) |>
+    sapply(function(x) c(AIC = AIC(x), BIC = BIC(x), SSE = deviance(x))) |>
+    data.frame()
+```
+
+## Visualize standardised fitted curves
+
+Let's obtain the curves with the estimated parameter for each model.
+
+```{r}
+logns <- paste0("logN", 1:nlevels(df_train$date))
+
+# predict
+df_train <- df_train |>
+    mutate(gomp_total = exp(coef(mod_gomp)[logns])[date], gomp_q = cases / gomp_total,
+           exp_total = exp(coef(mod_exp)[logns])[date], exp_q = cases / exp_total) |>
+    pivot_longer(gomp_total:exp_q, names_to = c("model", "var"),
+                 names_pattern = "(.*)_(.*)") |>
+    pivot_wider(names_from = var, values_from = value)
+
+df_fit <- df_fit |>
+    mutate(gomp_q = qgom(exp(coef(mod_gomp)["logphi"]), coef(mod_gomp)["b"])(delay),
+           exp_q = qexp(0, coef(mod_exp)["b"])(delay)) |>
+    pivot_longer(gomp_q:exp_q, names_to = c("model"), values_to = "q",
+                 names_transform = function(x) sub("_q", "", x))
+```
+
+Visualize the estimated theoretical curves using the exponential and Gompertz models.
+
+```{r, fig.height = 3.2}
+mylabs <- c("exp" = "(a) Exponential", "gomp" = "(b) Gompertz")
+p <- plot_compare_curves(df_train, df_fit, mylabs)
+p
+ggsave(file.path(path_figures, "huso104_qd_comparison.png"), p,
+      width = 20 * 8/ 20, height = 8 * 8 / 20, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```

@@ -1,0 +1,141 @@
+---
+title: "HusO104: Day of week analysis"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+targets:
+    - data/figures/huso104_day_of_week.png
+---
+
+
+
+<p>Simply analysis to test if week of day is significantly import in this application.</p>
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+
+huso &lt;- readRDS(file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))</code></pre>
+</div>
+<div id="convert-to-long-format" class="section level2">
+<h2>Convert to long format</h2>
+<p>Convert data to long format and filter with observed data by the last available date.</p>
+<pre class="r"><code>huso_long &lt;- huso |&gt;
+    select(-cases_baseline) |&gt;
+    mutate(available_delay = seq(n()-1, 0)) |&gt;
+    reporcases_longer() |&gt;
+    filter(delay &lt;= available_delay)</code></pre>
+</div>
+<div id="fit-gompertz-curves" class="section level2">
+<h2>Fit Gompertz curves</h2>
+<p>We will compare the Gompertz growth curves assuming a time-invariant
+reporting probability in the period of time between <code>2011-05-12</code> and <code>2011-06-01</code>.</p>
+<pre class="r"><code># prepare the data to train
+somedates &lt;- seq(as.Date(&quot;2011-05-12&quot;), as.Date(&quot;2011-06-01&quot;), &quot;1 day&quot;)
+df_train &lt;- filter(huso_long, date %in% somedates) |&gt;
+    mutate(weekday = factor(weekdays(date)), date = factor(date))
+df_fit &lt;- data.frame(delay = seq(0, max(df_train$delay), length = 100))
+
+# initial values
+max_cases &lt;- group_by(df_train, date) |&gt;
+    summarise(cases = max(cases)) |&gt;
+    pull(cases)
+
+# fit models
+mod_gomp &lt;- nls(
+    cases ~ exp(logN[date]) * exp(logphi*exp(-b * delay)),
+    data = df_train,
+    start = list(b = 0.5, logphi = log(0.05), logN = log(max_cases))
+)
+mod_gomp</code></pre>
+<pre><code>#&gt; Nonlinear regression model
+#&gt;   model: cases ~ exp(logN[date]) * exp(logphi * exp(-b * delay))
+#&gt;    data: df_train
+#&gt;       b  logphi   logN1   logN2   logN3   logN4   logN5   logN6   logN7   logN8   logN9  logN10 
+#&gt;  0.3038 -4.2775 -0.5861  1.0025 -0.6026  1.7715  1.8542  2.7637  2.7618  3.3201  3.4385  4.1349 
+#&gt;  logN11  logN12  logN13  logN14  logN15  logN16  logN17  logN18  logN19  logN20  logN21 
+#&gt;  3.7961  3.5679  3.8602  3.7629  3.5922  3.4839  3.0531  3.1528  3.2606  2.8611  2.7808 
+#&gt;  residual sum-of-squares: 1985
+#&gt; 
+#&gt; Number of iterations to convergence: 8 
+#&gt; Achieved convergence tolerance: 8.846e-06</code></pre>
+<pre class="r"><code>mod_gomp_weekday &lt;- nls(
+    cases ~ exp(logN[date]) * exp(logphi*exp(-b[weekday] * delay)),
+    data = df_train,
+    start = list(b = rep(0.5, 7), logphi = log(0.05), logN = log(max_cases))
+)
+mod_gomp_weekday</code></pre>
+<pre><code>#&gt; Nonlinear regression model
+#&gt;   model: cases ~ exp(logN[date]) * exp(logphi * exp(-b[weekday] * delay))
+#&gt;    data: df_train
+#&gt;      b1      b2      b3      b4      b5      b6      b7  logphi   logN1   logN2   logN3   logN4 
+#&gt;  0.2423  0.3330  0.3079  0.3032  0.3190  0.3424  0.2857 -4.3061 -0.6253  1.2069 -0.6112  1.7752 
+#&gt;   logN5   logN6   logN7   logN8   logN9  logN10  logN11  logN12  logN13  logN14  logN15  logN16 
+#&gt;  1.7897  2.6904  2.8047  3.2941  3.5939  4.1289  3.7986  3.5172  3.7897  3.8119  3.5564  3.7175 
+#&gt;  logN17  logN18  logN19  logN20  logN21 
+#&gt;  3.0428  3.1583  3.1563  2.7107  2.8785 
+#&gt;  residual sum-of-squares: 1910
+#&gt; 
+#&gt; Number of iterations to convergence: 11 
+#&gt; Achieved convergence tolerance: 5.169e-06</code></pre>
+<pre class="r"><code># summarise
+list(Constant = mod_gomp, Weekday = mod_gomp_weekday) |&gt;
+    sapply(function(x) c(AIC = AIC(x), BIC = BIC(x), SSE = deviance(x))) |&gt;
+    data.frame()</code></pre>
+<pre><code>#&gt;     Constant  Weekday
+#&gt; AIC 1394.827 1396.029
+#&gt; BIC 1482.147 1505.179
+#&gt; SSE 1985.161 1910.323</code></pre>
+</div>
+<div id="visualize-fitted-curves" class="section level2">
+<h2>Visualize fitted curves</h2>
+<p>Let’s obtain the curves with the estimated parameter for each model.</p>
+<pre class="r"><code>df_train &lt;- df_train |&gt;
+    mutate(pred_const = predict(mod_gomp), pred_weekday = predict(mod_gomp_weekday))</code></pre>
+<p>Visualize the estimated theoretical curves using the model constant and with
+day-of-effects.</p>
+<pre class="r"><code>custom_date &lt;- function(x) paste(x, weekdays(as.Date(x), TRUE), sep = &quot;: &quot;)
+p &lt;- plot_reported(df_train, maxdelay = 15) +
+    geom_line(aes(delay, pred_const, color = &quot;Constant&quot;), size = rel(0.5)) +
+    geom_line(aes(delay, pred_weekday, color = &quot;Day-of-week&quot;), size = rel(0.5)) +
+    facet_wrap(~ date, scales = &quot;free_y&quot;, ncol = 7, labeller = labeller(date = custom_date)) +
+    labs(color = NULL) +
+    theme(
+          legend.position = &quot;bottom&quot;,
+          legend.background = element_rect(fill = &quot;transparent&quot;)
+    )</code></pre>
+<pre><code>#&gt; Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+#&gt; ℹ Please use `linewidth` instead.
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>p</code></pre>
+<p><img src="/parametric-nowcasting/40-explore/25-husO104-compare-weekday_files/figure-html/unnamed-chunk-5-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_day_of_week.png&quot;), p,
+       width = 8, height = 4.5, dpi = 300)</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   2.790   0.359   3.032</code></pre>
+</div>

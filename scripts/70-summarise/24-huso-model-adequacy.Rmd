@@ -1,0 +1,87 @@
+---
+title: "HusO104: Visualize fitted reported cases"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/modelled/huso104_20110512_20110606_mcmc.rds
+targets:
+    - data/figures/huso104_reported_fitted_curves.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cmdstanr)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_processed <- file.path(path_data, "processed")
+path_modelled <- file.path(path_data, "modelled")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+source(file.path(path_src, "50-modelling.R"))
+source(file.path(path_src, "60-summarise.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+huso
+huso_mcmc <- readRDS(file.path(path_modelled, "huso104_20110512_20110606_mcmc.rds"))
+names(huso_mcmc)
+```
+
+## HusO104 data in long format
+
+```{r}
+huso_long <- huso |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Predicted mean in long format
+
+We select the last period which include all the data, and obtain predictive mean for all
+models in long format data frame.
+
+```{r}
+# select model for date
+index <- length(huso_mcmc)
+first_date <- min(huso$date)
+last_date <- as.Date(names(huso_mcmc)[index])
+dates <- seq(first_date, last_date, by = "1 day")
+
+# prediction in long format
+pred_long <- predmean_df(huso_mcmc[[index]], delays = 0:15, dates, "gompertz")
+pred_long
+```
+
+## Visualize curves
+
+```{r, fig.height = 5.5}
+p <- plot_predmean(huso_long, pred_long) +
+        facet_wrap(~ date, scales = "free_y", nrow = 5)
+p
+ggsave(file.path(path_figures, "huso104_reported_fitted_curves.png"), p,
+     width = 8, height = 5.5, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

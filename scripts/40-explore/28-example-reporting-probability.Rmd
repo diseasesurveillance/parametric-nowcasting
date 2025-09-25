@@ -1,0 +1,114 @@
+---
+title: "Fitting example of cumulative reporting probability"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/processed/sari_41002_20090614_20091122.rds
+targets:
+    - data/figures/qd_example_sari_huso104.png
+---
+
+We show an example of how the exponential and Gompertz cumulative reporting probability
+fits real data.
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+sari <- readRDS(file.path(path_processed, "sari_41002_20090614_20091122.rds"))
+```
+
+## Convert to long format and filter
+
+Convert datasets to long format and filter the desired date: `2009-08-30` for SARI, and `2011-05-22` for HusO104.
+
+```{r}
+sari_train <- sari |>
+    select(-cases_baseline) |>
+    reporcases_longer() |>
+    filter(date == "2009-08-30")
+
+huso_train <- huso |>
+    select(-cases_baseline) |>
+    reporcases_longer() |>
+    filter(date == "2011-05-22")
+```
+
+## Fit exponential model for SARI
+
+```{r}
+sari_model <- nls(
+    cases ~ exp(logN) * (1 - (1 - plogis(logitphi))* exp(-b * delay)),
+    data = sari_train,
+    start = list(b = 0.5, logitphi = qlogis(0.5), logN = log(max(sari_train$cases)))
+)
+sari_model
+
+sari_train <- sari_train |>
+    mutate(q = cases / exp(coef(sari_model)["logN"]))
+
+sari_fit <- data.frame(delay = seq(0, 26, length = 100)) |>
+    mutate(q = qexp(plogis(coef(sari_model)["logitphi"]), coef(sari_model)["b"])(delay))
+```
+
+## Fit Gompertz model for HusO104
+
+```{r}
+huso_model <- nls(
+    cases ~ exp(logN) * exp(logphi*exp(-b * delay)),
+    data = huso_train,
+    start = list(b = 0.5, logphi = log(0.05), logN = log(max(huso_train$cases)))
+)
+huso_model
+
+huso_train <- huso_train |>
+    mutate(q = cases / exp(coef(huso_model)["logN"]))
+
+huso_fit <- data.frame(delay = seq(0, 15, length = 100)) |>
+    mutate(q = qgom(exp(coef(huso_model)["logphi"]), coef(huso_model)["b"])(delay))
+```
+
+## Visualize theoretical and empirical curves for SARI and HusO104
+
+
+```{r, fig.height = 3.2}
+
+df_train <- bind_rows(list(exp = sari_train, gomp = huso_train), .id = "model")
+df_fit <- bind_rows(list(exp = sari_fit, gomp = huso_fit), .id = "model")
+
+mylabs <- c("exp" = "(a) SARI: Exponential", "gomp" = "(b) HUS-O104: Gompertz")
+p <- plot_compare_curves(df_train, df_fit, mylabs) +
+    scale_y_continuous(limits = c(0, 1))
+p
+ggsave(file.path(path_figures, "qd_example_sari_huso104.png"), p,
+      width = 20 * 8/ 20, height = 8 * 8 / 20, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```

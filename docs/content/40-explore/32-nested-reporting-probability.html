@@ -1,0 +1,76 @@
+---
+title: "Nested reported probabilties"
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))</code></pre>
+</div>
+<div id="define-nested-and-shifted-functions" class="section level2">
+<h2>Define nested and shifted functions</h2>
+<pre class="r"><code>qexp_nested &lt;- function(alpha, b1, b2) {
+    function(delay) 1 - alpha * exp(-b1 * delay) -
+        (1 - alpha) * exp(-b2 * delay)
+}
+
+
+qexp_nested_shifted &lt;- function(alpha, b1, b2) {
+    function(delay) 1 - alpha * exp(-b1 * delay) -
+        (1 - alpha) * exp(-b2 * pmax(delay - 10, 0))
+}</code></pre>
+</div>
+<div id="visualize-composed-functions" class="section level2">
+<h2>Visualize composed functions</h2>
+<pre class="r"><code>df &lt;- data.frame(delay = seq(0, 15, length = 1000)) |&gt;
+    mutate(q1 = qexp(0, 1)(delay),
+           q2 = qexp(0, 0.4)(delay),
+           q3 = qexp_nested(0.7, 1, 0.4)(delay),
+           q4 = qexp_nested_shifted(0.8, 1, 0.4)(delay))
+
+p &lt;- ggplot(df) +
+    geom_line(aes(delay, q1, color = &quot;(a) Exponential with quick convergence&quot;)) +
+    geom_line(aes(delay, q2, color = &quot;(b) Exponential with slow convergence&quot;)) +
+    geom_line(aes(delay, q3, color = &quot;(c) Nested function&quot;), linetype = 2, linewidth = 0.7) +
+    geom_line(aes(delay, q4, color = &quot;(d) Shifted nested function&quot;), linetype = 4, linewidth = 0.7) +
+    labs(color = &quot;&quot;, y = &quot;Cumulative reporting probability&quot;) +
+    theme_bw(9) +
+    theme(legend.position = c(0.7, 0.35))</code></pre>
+<pre><code>#&gt; Warning: A numeric `legend.position` argument in `theme()` was deprecated in ggplot2 3.5.0.
+#&gt; ℹ Please use the `legend.position.inside` argument of `theme()` instead.
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>p</code></pre>
+<p><img src="/parametric-nowcasting/40-explore/32-nested-reporting-probability_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;qd_nested_functions.png&quot;), p,
+      width = 6, height = 4, dpi = 300)</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   1.089   0.339   1.110</code></pre>
+</div>

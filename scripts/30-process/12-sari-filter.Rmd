@@ -1,0 +1,77 @@
+---
+title: "Prepare SARI data"
+prerequisites:
+    - data/cleaned/clean_data_srag_epiweek_delay_table_PR.csv
+targets:
+    - data/processed/sari_41002_20090614_20091122.rds
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+Filter SARI data for the dates of interest and prepare for analysis.
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(aweek)
+library(tidyr)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+
+sari <- path_cleaned |>
+    file.path("clean_data_srag_epiweek_delay_table_PR.csv") |>
+    readr::read_csv()
+names(sari)
+```
+
+## Process data
+
+- Standardise variable names,
+- create the date of the week and year,
+- filter a region of interest $41002$ and
+- filter dates of interest from `2009-06-14` to `2009-11-22`.
+
+```{r}
+date_period <- as.Date(c("2009-06-14", "2009-11-22"))
+sari_41002 <- sari |>
+    rename_with(tolower) |>
+    mutate(date = get_date(week = epiweek, year = epiyear, start = 7)) |>
+    filter(regionalsaude == 41002, date >= date_period[1], date <= date_period[2]) |>
+    select(- c("epiweek", "epiyear", "regionalsaude", "notifications_within_26w")) |>
+    rename_with(function(x) gsub("d", "delay", x), d0:d26) |>
+    relocate(date) |>
+    relocate(cases_baseline = notifications, .after = last_col())
+```
+
+Compute the cumulative number of cases.
+
+```{r}
+D <- 26
+sari_41002[, 2:(D+2)] <- t(apply(as.matrix(sari_41002[, 2:(D+2)]), 1, cumsum))
+sari_41002
+```
+
+## Save processed data
+
+```{r}
+saveRDS(sari_41002, file.path(path_processed, "sari_41002_20090614_20091122.rds"))
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

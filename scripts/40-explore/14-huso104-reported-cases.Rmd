@@ -1,0 +1,66 @@
+---
+title: "Exploratory analysis of HusO104 hospitalizations"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+targets:
+    - data/figures/huso104_reported_cases.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_cleaned <- file.path(path_data, "cleaned")
+path_processed <- file.path(path_data, "processed")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+```
+
+## Convert to long format
+
+Convert data to long format and filter with observed data by the last available date.
+
+```{r}
+huso_long <- huso |>
+    mutate(available_delay = seq(n()-1, 0)) |>
+    reporcases_longer() |>
+    filter(delay <= available_delay)
+```
+
+## Visualize cumulative reported cases
+
+```{r, fig.height = 5}
+p <- plot_reported(huso_long, maxdelay = 15) +
+    facet_wrap(~ date, scales = "free_y", nrow = 5) +
+    labs(x = TeX("Delay (days)"))
+p
+ggsave(file.path(path_figures, "huso104_reported_cases.png"), p,
+       width = 8, height = 5, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

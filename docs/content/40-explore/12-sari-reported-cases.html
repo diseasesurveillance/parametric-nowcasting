@@ -1,0 +1,83 @@
+---
+title: "Exploratory analysis of SARI reported cases"
+prerequisites:
+    - data/processed/sari_41002_20090614_20091122.rds
+targets:
+    - data/figures/sari_reported_cases.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+
+sari &lt;- readRDS(file.path(path_processed, &quot;sari_41002_20090614_20091122.rds&quot;))
+sari</code></pre>
+<pre><code>#&gt; # A tibble: 24 × 29
+#&gt;    date       delay0 delay1 delay2 delay3 delay4 delay5 delay6 delay7 delay8 delay9 delay10 delay11
+#&gt;    &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2009-06-14      0      3      3      3      3      3      3      6      7      7       7       8
+#&gt;  2 2009-06-21      2      4      5      7      7      9     12     15     15     16      16      16
+#&gt;  3 2009-06-28      2     13     17     21     22     30     35     39     39     41      41      41
+#&gt;  4 2009-07-05     14     16     17     18     19     22     23     25     26     26      27      27
+#&gt;  5 2009-07-12      2     11     11     25     39     47     53     56     58     58      58      58
+#&gt;  6 2009-07-19      2     18     91    154    179    198    204    207    207    207     209     209
+#&gt;  7 2009-07-26     32    329    463    519    550    559    567    572    575    578     579     581
+#&gt;  8 2009-08-02    272    563    749    932   1025   1061   1080   1088   1094   1102    1109    1140
+#&gt;  9 2009-08-09    183    549    767    893    974   1050   1071   1091   1112   1119    1132    1146
+#&gt; 10 2009-08-16    145    417    510    573    643    667    681    699    738    748     757     761
+#&gt; # ℹ 14 more rows
+#&gt; # ℹ 16 more variables: delay12 &lt;dbl&gt;, delay13 &lt;dbl&gt;, delay14 &lt;dbl&gt;, delay15 &lt;dbl&gt;, delay16 &lt;dbl&gt;,
+#&gt; #   delay17 &lt;dbl&gt;, delay18 &lt;dbl&gt;, delay19 &lt;dbl&gt;, delay20 &lt;dbl&gt;, delay21 &lt;dbl&gt;, delay22 &lt;dbl&gt;,
+#&gt; #   delay23 &lt;dbl&gt;, delay24 &lt;dbl&gt;, delay25 &lt;dbl&gt;, delay26 &lt;dbl&gt;, cases_baseline &lt;dbl&gt;</code></pre>
+</div>
+<div id="convert-to-long-format" class="section level2">
+<h2>Convert to long format</h2>
+<p>Convert data to long format and filter with observed data by the last available date.</p>
+<pre class="r"><code>sari_long &lt;- sari |&gt;
+    mutate(available_delay = seq(n()-1, 0)) |&gt;
+    reporcases_longer() |&gt;
+    filter(delay &lt;= available_delay)</code></pre>
+</div>
+<div id="visualize-cumulative-reported-cases" class="section level2">
+<h2>Visualize cumulative reported cases</h2>
+<pre class="r"><code>p &lt;- plot_reported(sari_long, maxdelay = 26) +
+    labs(x = TeX(&quot;Delay (weeks)&quot;))
+p</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+<p><img src="/parametric-nowcasting/40-explore/12-sari-reported-cases_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;sari_reported_cases.png&quot;), p,
+       width = 8, height = 4.5, dpi = 300)</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   2.509   0.340   2.536</code></pre>
+</div>

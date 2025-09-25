@@ -1,0 +1,267 @@
+---
+title: "Test time-varying parametric exponential model with random walks"
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(cmdstanr)</code></pre>
+<pre><code>#&gt; CmdStan path set to: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; This is cmdstanr version 0.9.0</code></pre>
+<pre><code>#&gt; - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr</code></pre>
+<pre><code>#&gt; - CmdStan path: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; - CmdStan version: 2.36.0</code></pre>
+<pre class="r"><code>library(bayesplot)</code></pre>
+<pre><code>#&gt; This is bayesplot version 1.11.1</code></pre>
+<pre><code>#&gt; - Online documentation and vignettes at mc-stan.org/bayesplot</code></pre>
+<pre><code>#&gt; - bayesplot theme set to bayesplot::theme_default()</code></pre>
+<pre><code>#&gt;    * Does _not_ affect other ggplot2 plots</code></pre>
+<pre><code>#&gt;    * See ?bayesplot_theme_set for details on theme setting</code></pre>
+<pre class="r"><code>path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_models &lt;- file.path(path_src, &quot;models&quot;)
+
+source(file.path(path_src, &quot;40-simulate.R&quot;))
+source(file.path(path_src, &quot;50-modelling.R&quot;))
+
+model &lt;- cmdstan_model(file.path(path_models, &quot;exp-rw1.stan&quot;))</code></pre>
+</div>
+<div id="fully-reported-scenario" class="section level2">
+<h2>Fully reported scenario</h2>
+<div id="setting" class="section level3">
+<h3>Setting</h3>
+<pre class="r"><code># data
+alpha_increase_seq_1 &lt;- seq(10, 750, by = 30)
+alpha_decrease_seq_1 &lt;- seq(750, 10, by = -30)
+alpha_lamb &lt;-  c( rep(10,5), alpha_increase_seq_1 + rnorm(alpha_increase_seq_1,10,10),
+                 alpha_decrease_seq_1 + rnorm(alpha_decrease_seq_1,10,10),
+                 rep(10,5))
+beta_lamb &lt;- 0.5
+T &lt;- 60
+D &lt;- 15;</code></pre>
+</div>
+<div id="simulation" class="section level3">
+<h3>Simulation</h3>
+<pre class="r"><code>args_exp_rw_fr &lt;- list(
+  data = list(
+    alpha_lamb = alpha_lamb,
+    beta_lamb  = beta_lamb,
+    T       = T,
+    date_start = as.Date(&quot;2024-01-01&quot;),
+    D = D
+  ),
+  q_model = list(
+    method        = &quot;exp_rw&quot;,
+    method_params = list(mu_logb = log(0.7), sigma_logb = 0.1, mu_logitphi = 1, sigma_logitphi = 0.1)
+  )
+)
+
+exp_rw_fr &lt;- simulateData(args_exp_rw_fr)
+par(mfrow = c(2, 1))
+plot(exp_rw_fr$b, pch = 19, type = &quot;b&quot;)
+plot(exp_rw_fr$phi, pch = 19, type = &quot;b&quot;)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>par(mfrow = c(1, 1))
+matplot(t(exp_rw_fr$q), type = &quot;l&quot;, lty = 1, ylim = c(0, 1))</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-3-2.png" width="100%" style="display: block; margin: auto;" /></p>
+</div>
+<div id="model-fitting" class="section level3">
+<h3>Model fitting</h3>
+<pre class="r"><code>ind &lt;- 40
+hypers &lt;- hypers_q(phi_ref = 0.2, D_ref = 15, type = &quot;exponential&quot;, alpha_phi = 1.4, sd_log_b = 1, delay_seq = 0:15)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>stan_data &lt;- c(list(T = ind, D = 15, Y = exp_rw_fr$case_reported_cumulated[1:ind, ]), hypers)
+
+test = model$sample(
+    data = stan_data,
+    iter_sampling = 3000,
+    iter_warmup = 2000,
+    chains = 1,
+    refresh = 0,
+    thin = 1)</code></pre>
+<pre><code>#&gt; Running MCMC with 1 chain...</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: normal_lpdf: Scale parameter is 0, but must be positive! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 44, column 4 to column 47)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 finished in 8.2 seconds.</code></pre>
+<pre class="r"><code>varnames &lt;- test$summary()$variable
+
+mcmc_areas(test$draws(&quot;sigma_log_b&quot;), prob_outer = 0.95)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-2.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>mcmc_areas(test$draws(&quot;sigma_logit_phi&quot;), prob_outer = 0.95)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-3.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^b\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_fr$b[1:ind]
+)
+mcmc_areas(test$draws(&quot;b&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-4.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^phi\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = 1 - exp_rw_fr$phi[1:ind]
+)
+mcmc_areas(test$draws(&quot;phi&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-5.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^lambda\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_fr$lambda[1:ind]
+)
+mcmc_areas(test$draws(&quot;lambda&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-6.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^q\\[10,.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_fr$q[10,]
+)
+mcmc_areas(test$draws(grep(&quot;^q\\[10,.+\\]$&quot;, varnames, value = TRUE)), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-7.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^N\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_fr$case_true[1:ind, 1]
+)
+mcmc_areas(test$draws(&quot;N&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-4-8.png" width="100%" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="non-fully-reported-scenario" class="section level2">
+<h2>Non-fully reported scenario</h2>
+<div id="simulation-1" class="section level3">
+<h3>Simulation</h3>
+<pre class="r"><code>args_exp_rw_nfr &lt;- list(
+  data = list(
+    alpha_lamb = alpha_lamb,
+    beta_lamb  = beta_lamb,
+    T       = T,
+    date_start = as.Date(&quot;2024-01-01&quot;),
+    D = D
+  ),
+  q_model = list(
+    method        = &quot;exp_rw&quot;,
+    method_params = list(mu_logb = log(0.2), sigma_logb = 0.1, mu_logitphi = 1.5,
+            sigma_logitphi = 0.1)
+  )
+)
+
+exp_rw_nfr &lt;- simulateData(args_exp_rw_nfr)
+par(mfrow = c(2, 1))
+plot(exp_rw_nfr$b, pch = 19, type = &quot;b&quot;)
+plot(exp_rw_nfr$phi, pch = 19, type = &quot;b&quot;)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-5-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>par(mfrow = c(1, 1))
+matplot(t(exp_rw_nfr$q), type = &quot;l&quot;, lty = 1, ylim = c(0, 1))</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-5-2.png" width="100%" style="display: block; margin: auto;" /></p>
+</div>
+<div id="model-fitting-1" class="section level3">
+<h3>Model fitting</h3>
+<pre class="r"><code>ind = 40
+hypers = hypers_q(phi_ref = 0.2, D_ref = 15, type = &quot;exponential&quot;, alpha_phi = 1.4, sd_log_b = 1, delay_seq = 0:15)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>stan_data &lt;- c(list(T = ind, D = 15, Y = exp_rw_nfr$case_reported_cumulated[1:ind, ]), hypers)
+
+test = model$sample(
+    data = stan_data,
+    iter_sampling = 3000,
+    iter_warmup = 2500,
+    chains = 1,
+    refresh = 0,
+    thin = 1)</code></pre>
+<pre><code>#&gt; Running MCMC with 1 chain...</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:</code></pre>
+<pre><code>#&gt; Chain 1 Exception: poisson_lpmf: Rate parameter is -nan, but must be nonnegative! (in &#39;/tmp/RtmpUb8qqc/model-197695b7a1.stan&#39;, line 51, column 6 to column 49)</code></pre>
+<pre><code>#&gt; Chain 1 If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,</code></pre>
+<pre><code>#&gt; Chain 1 but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.</code></pre>
+<pre><code>#&gt; Chain 1</code></pre>
+<pre><code>#&gt; Chain 1 finished in 8.4 seconds.</code></pre>
+<pre class="r"><code>varnames &lt;- test$summary()$variable
+
+mcmc_areas(test$draws(&quot;sigma_log_b&quot;), prob_outer = 0.95)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-2.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>mcmc_areas(test$draws(&quot;sigma_logit_phi&quot;), prob_outer = 0.95)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-3.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^b\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_nfr$b[1:ind]
+)
+mcmc_areas(test$draws(&quot;b&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-4.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^phi\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_nfr$phi[1:ind]
+)
+mcmc_areas(test$draws(&quot;phi&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<pre><code>#&gt; Warning: Removed 40 rows containing missing values or values outside the scale range
+#&gt; (`geom_point()`).</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-5.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^lambda\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_nfr$lambda[1:ind]
+)
+mcmc_areas(test$draws(&quot;lambda&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-6.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^q\\[10,.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_nfr$q[11,]
+)
+mcmc_areas(test$draws(grep(&quot;^q\\[10,.+\\]$&quot;, varnames, value = TRUE)), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-7.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>param_true = tibble(
+    parameter = grep(&quot;^N\\[.+\\]$&quot;, varnames, value = TRUE),
+    x = exp_rw_nfr$case_true[1:ind, 1]
+)
+mcmc_areas(test$draws(&quot;N&quot;), prob_outer = 0.95) +
+    geom_point(aes(x = x), param_true, color = &quot;red&quot;, size = 1)</code></pre>
+<p><img src="/parametric-nowcasting/50-simulate/13-test-param-exp-rw1_files/figure-html/unnamed-chunk-6-8.png" width="100%" style="display: block; margin: auto;" /></p>
+</div>
+</div>

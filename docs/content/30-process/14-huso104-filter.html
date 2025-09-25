@@ -1,0 +1,87 @@
+---
+title: "Prepare HusO104 data"
+prerequisites:
+    - data/cleaned/husO104_tri_cumu.csv
+targets:
+    - data/processed/huso104_20110512_20110606.rds
+---
+
+
+
+<p>Filter HusO104 data for the dates of interest and prepare for analysis.</p>
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+
+huso &lt;- path_cleaned |&gt;
+    file.path(&quot;husO104_tri_cumu.csv&quot;) |&gt;
+    readr::read_csv() |&gt;
+    as_tibble() |&gt;
+    rename(date = `...1`)</code></pre>
+<pre><code>#&gt; New names:
+#&gt; • `` -&gt; `...1`</code></pre>
+<pre><code>#&gt; Rows: 59 Columns: 17
+#&gt; ── Column specification ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#&gt; Delimiter: &quot;,&quot;
+#&gt; dbl  (16): delay0, delay1, delay2, delay3, delay4, delay5, delay6, delay7, delay8, delay9, delay...
+#&gt; date  (1): ...1
+#&gt; 
+#&gt; ℹ Use `spec()` to retrieve the full column specification for this data.
+#&gt; ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<pre class="r"><code>names(huso)</code></pre>
+<pre><code>#&gt;  [1] &quot;date&quot;    &quot;delay0&quot;  &quot;delay1&quot;  &quot;delay2&quot;  &quot;delay3&quot;  &quot;delay4&quot;  &quot;delay5&quot;  &quot;delay6&quot;  &quot;delay7&quot; 
+#&gt; [10] &quot;delay8&quot;  &quot;delay9&quot;  &quot;delay10&quot; &quot;delay11&quot; &quot;delay12&quot; &quot;delay13&quot; &quot;delay14&quot; &quot;delay15&quot;</code></pre>
+</div>
+<div id="process-data" class="section level2">
+<h2>Process data</h2>
+<ul>
+<li>Filter dates of interest from <code>2011-05-12</code> to <code>2011-06-06</code>.</li>
+</ul>
+<pre class="r"><code>date_period &lt;- as.Date(c(&quot;2011-05-12&quot;, &quot;2011-06-06&quot;))
+huso &lt;- huso |&gt;
+    filter(date &gt;= date_period[1], date &lt;= date_period[2]) |&gt;
+    mutate(cases_baseline = delay15)
+huso</code></pre>
+<pre><code>#&gt; # A tibble: 26 × 18
+#&gt;    date       delay0 delay1 delay2 delay3 delay4 delay5 delay6 delay7 delay8 delay9 delay10 delay11
+#&gt;    &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2011-05-12      0      0      0      0      0      0      0      0      0      0       0       0
+#&gt;  2 2011-05-13      0      0      0      0      0      0      0      0      0      0       0       2
+#&gt;  3 2011-05-14      0      0      0      0      0      0      0      0      0      0       0       0
+#&gt;  4 2011-05-15      0      0      0      0      0      0      0      0      0      1       3       7
+#&gt;  5 2011-05-16      0      0      0      0      0      0      0      0      0      2       5       7
+#&gt;  6 2011-05-17      0      0      0      0      0      0      0      5      7     13      16      16
+#&gt;  7 2011-05-18      0      0      0      0      0      0      2      3     12     14      14      14
+#&gt;  8 2011-05-19      0      0      0      0      1      6     11     20     23     23      23      23
+#&gt;  9 2011-05-20      0      0      0      0      4      9     13     19     19     21      26      27
+#&gt; 10 2011-05-21      0      0      0      3      9     26     41     41     41     48      52      53
+#&gt; # ℹ 16 more rows
+#&gt; # ℹ 5 more variables: delay12 &lt;dbl&gt;, delay13 &lt;dbl&gt;, delay14 &lt;dbl&gt;, delay15 &lt;dbl&gt;,
+#&gt; #   cases_baseline &lt;dbl&gt;</code></pre>
+</div>
+<div id="save-processed-data" class="section level2">
+<h2>Save processed data</h2>
+<pre class="r"><code>saveRDS(huso, file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   0.644   0.340   0.663</code></pre>
+</div>

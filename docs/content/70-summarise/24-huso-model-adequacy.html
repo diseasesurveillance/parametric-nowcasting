@@ -1,0 +1,121 @@
+---
+title: "HusO104: Visualize fitted reported cases"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/modelled/huso104_20110512_20110606_mcmc.rds
+targets:
+    - data/figures/huso104_reported_fitted_curves.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(cmdstanr)</code></pre>
+<pre><code>#&gt; CmdStan path set to: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; This is cmdstanr version 0.9.0</code></pre>
+<pre><code>#&gt; - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr</code></pre>
+<pre><code>#&gt; - CmdStan path: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; - CmdStan version: 2.36.0</code></pre>
+<pre class="r"><code>library(latex2exp)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_modelled &lt;- file.path(path_data, &quot;modelled&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+source(file.path(path_src, &quot;50-modelling.R&quot;))
+source(file.path(path_src, &quot;60-summarise.R&quot;))
+
+huso &lt;- readRDS(file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))
+huso</code></pre>
+<pre><code>#&gt; # A tibble: 26 × 18
+#&gt;    date       delay0 delay1 delay2 delay3 delay4 delay5 delay6 delay7 delay8 delay9 delay10 delay11
+#&gt;    &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 2011-05-12      0      0      0      0      0      0      0      0      0      0       0       0
+#&gt;  2 2011-05-13      0      0      0      0      0      0      0      0      0      0       0       2
+#&gt;  3 2011-05-14      0      0      0      0      0      0      0      0      0      0       0       0
+#&gt;  4 2011-05-15      0      0      0      0      0      0      0      0      0      1       3       7
+#&gt;  5 2011-05-16      0      0      0      0      0      0      0      0      0      2       5       7
+#&gt;  6 2011-05-17      0      0      0      0      0      0      0      5      7     13      16      16
+#&gt;  7 2011-05-18      0      0      0      0      0      0      2      3     12     14      14      14
+#&gt;  8 2011-05-19      0      0      0      0      1      6     11     20     23     23      23      23
+#&gt;  9 2011-05-20      0      0      0      0      4      9     13     19     19     21      26      27
+#&gt; 10 2011-05-21      0      0      0      3      9     26     41     41     41     48      52      53
+#&gt; # ℹ 16 more rows
+#&gt; # ℹ 5 more variables: delay12 &lt;dbl&gt;, delay13 &lt;dbl&gt;, delay14 &lt;dbl&gt;, delay15 &lt;dbl&gt;,
+#&gt; #   cases_baseline &lt;dbl&gt;</code></pre>
+<pre class="r"><code>huso_mcmc &lt;- readRDS(file.path(path_modelled, &quot;huso104_20110512_20110606_mcmc.rds&quot;))
+names(huso_mcmc)</code></pre>
+<pre><code>#&gt; [1] &quot;2011-05-25&quot; &quot;2011-05-28&quot; &quot;2011-05-31&quot; &quot;2011-06-03&quot; &quot;2011-06-06&quot;</code></pre>
+</div>
+<div id="huso104-data-in-long-format" class="section level2">
+<h2>HusO104 data in long format</h2>
+<pre class="r"><code>huso_long &lt;- huso |&gt;
+    mutate(available_delay = seq(n()-1, 0)) |&gt;
+    reporcases_longer() |&gt;
+    filter(delay &lt;= available_delay)</code></pre>
+</div>
+<div id="predicted-mean-in-long-format" class="section level2">
+<h2>Predicted mean in long format</h2>
+<p>We select the last period which include all the data, and obtain predictive mean for all
+models in long format data frame.</p>
+<pre class="r"><code># select model for date
+index &lt;- length(huso_mcmc)
+first_date &lt;- min(huso$date)
+last_date &lt;- as.Date(names(huso_mcmc)[index])
+dates &lt;- seq(first_date, last_date, by = &quot;1 day&quot;)
+
+# prediction in long format
+pred_long &lt;- predmean_df(huso_mcmc[[index]], delays = 0:15, dates, &quot;gompertz&quot;)
+pred_long</code></pre>
+<pre><code>#&gt; # A tibble: 1,664 × 4
+#&gt;    method   date       delay   cases
+#&gt;    &lt;fct&gt;    &lt;date&gt;     &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1 nonparam 2011-05-12     0 0.00317
+#&gt;  2 nonparam 2011-05-12     1 0.0144 
+#&gt;  3 nonparam 2011-05-12     2 0.0402 
+#&gt;  4 nonparam 2011-05-12     3 0.0757 
+#&gt;  5 nonparam 2011-05-12     4 0.122  
+#&gt;  6 nonparam 2011-05-12     5 0.166  
+#&gt;  7 nonparam 2011-05-12     6 0.213  
+#&gt;  8 nonparam 2011-05-12     7 0.251  
+#&gt;  9 nonparam 2011-05-12     8 0.289  
+#&gt; 10 nonparam 2011-05-12     9 0.330  
+#&gt; # ℹ 1,654 more rows</code></pre>
+</div>
+<div id="visualize-curves" class="section level2">
+<h2>Visualize curves</h2>
+<pre class="r"><code>p &lt;- plot_predmean(huso_long, pred_long) +
+        facet_wrap(~ date, scales = &quot;free_y&quot;, nrow = 5)
+p</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/24-huso-model-adequacy_files/figure-html/unnamed-chunk-4-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_reported_fitted_curves.png&quot;), p,
+     width = 8, height = 5.5, dpi = 300)</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   9.625   0.936  12.037</code></pre>
+</div>

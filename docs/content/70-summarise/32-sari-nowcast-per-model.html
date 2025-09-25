@@ -1,0 +1,113 @@
+---
+title: "SARI: Visualize nowcasting results by model and reference date"
+prerequisites:
+    - data/processed/sari_41002_20090614_20091122.rds
+    - data/modelled/sari_41002_20090614_20091122_mcmc.rds
+targets:
+    - data/figures/sari_nowcast.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(cmdstanr)</code></pre>
+<pre><code>#&gt; CmdStan path set to: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; This is cmdstanr version 0.9.0</code></pre>
+<pre><code>#&gt; - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr</code></pre>
+<pre><code>#&gt; - CmdStan path: /usr/share/cmdstan/cmdstan-2.36.0</code></pre>
+<pre><code>#&gt; - CmdStan version: 2.36.0</code></pre>
+<pre class="r"><code>path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_modelled &lt;- file.path(path_data, &quot;modelled&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+source(file.path(path_src, &quot;50-modelling.R&quot;))
+source(file.path(path_src, &quot;60-summarise.R&quot;))
+
+sari &lt;- readRDS(file.path(path_processed, &quot;sari_41002_20090614_20091122.rds&quot;))
+sari_mcmc &lt;- readRDS(file.path(path_modelled, &quot;sari_41002_20090614_20091122_mcmc.rds&quot;))
+names(sari_mcmc)</code></pre>
+<pre><code>#&gt; [1] &quot;2009-08-02&quot; &quot;2009-08-30&quot; &quot;2009-09-27&quot; &quot;2009-10-25&quot; &quot;2009-11-22&quot;</code></pre>
+</div>
+<div id="processing-results" class="section level2">
+<h2>Processing results</h2>
+<p>Obtain summarised date for reported cases and baseline cases, and summarise the nowcasting
+results from the mcmc samples.</p>
+<pre class="r"><code>sari_summary &lt;- reporcases_periods(sari, names(sari_mcmc))
+sari_summary</code></pre>
+<pre><code>#&gt; # A tibble: 80 × 4
+#&gt;    date_end   date       cases_reported cases_baseline
+#&gt;    &lt;chr&gt;      &lt;date&gt;              &lt;dbl&gt;          &lt;dbl&gt;
+#&gt;  1 2009-08-02 2009-06-14              6              8
+#&gt;  2 2009-08-02 2009-06-21             12             19
+#&gt;  3 2009-08-02 2009-06-28             30             46
+#&gt;  4 2009-08-02 2009-07-05             19             30
+#&gt;  5 2009-08-02 2009-07-12             25             64
+#&gt;  6 2009-08-02 2009-07-19             91            223
+#&gt;  7 2009-08-02 2009-07-26            329            639
+#&gt;  8 2009-08-02 2009-08-02            272           1331
+#&gt;  9 2009-08-30 2009-06-14              8              8
+#&gt; 10 2009-08-30 2009-06-21             16             19
+#&gt; # ℹ 70 more rows</code></pre>
+<pre class="r"><code>sari_nowcast &lt;- nowcast_periods(sari_mcmc, date_by = &quot;1 week&quot;)
+sari_nowcast</code></pre>
+<pre><code>#&gt; # A tibble: 320 × 6
+#&gt;    date_end   model    date       median lower  upper
+#&gt;    &lt;date&gt;     &lt;fct&gt;    &lt;date&gt;      &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+#&gt;  1 2009-08-02 nonparam 2009-06-14    12     4     24 
+#&gt;  2 2009-08-02 nonparam 2009-06-21    28    13     54 
+#&gt;  3 2009-08-02 nonparam 2009-06-28    82    46    152 
+#&gt;  4 2009-08-02 nonparam 2009-07-05    87    49    165 
+#&gt;  5 2009-08-02 nonparam 2009-07-12    72    38    140 
+#&gt;  6 2009-08-02 nonparam 2009-07-19   270   156    507 
+#&gt;  7 2009-08-02 nonparam 2009-07-26  2200  1280   4154 
+#&gt;  8 2009-08-02 nonparam 2009-08-02 13450. 7396. 26428.
+#&gt;  9 2009-08-02 exp      2009-06-14     4     1     10 
+#&gt; 10 2009-08-02 exp      2009-06-21    11     4     20 
+#&gt; # ℹ 310 more rows</code></pre>
+</div>
+<div id="visualize-nowcasting-per-reference-date" class="section level2">
+<h2>Visualize nowcasting per reference date</h2>
+<pre class="r"><code>model_labels &lt;- c(
+  &quot;nonparam&quot;  = &quot;bold(&#39;M1: Non-parametric&#39;~q[d])&quot;,
+  &quot;exp&quot;       = &quot;bold(&#39;M2: Parametric&#39;~q(d))&quot;,
+  &quot;exp_rw1&quot;   = &quot;bold(&#39;M3:&#39;~q[t](d)~&#39;with random walks&#39;)&quot;,
+  &quot;exp_ou&quot;    = &quot;bold(&#39;M4:&#39;~q[t](d)~&#39;with OU processes&#39;)&quot;
+)
+p &lt;- plot_nowcast(sari_nowcast, sari_summary, model_labels = model_labels)</code></pre>
+<pre><code>#&gt; Warning: A numeric `legend.position` argument in `theme()` was deprecated in ggplot2 3.5.0.
+#&gt; ℹ Please use the `legend.position.inside` argument of `theme()` instead.
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>p</code></pre>
+<pre><code>#&gt; Warning: Combining variables of class &lt;Date&gt; and &lt;character&gt; was deprecated in ggplot2 3.4.0.
+#&gt; ℹ Please ensure your variables are compatible before plotting (location: `combine_vars()`)
+#&gt; This warning is displayed once every 8 hours.
+#&gt; Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.</code></pre>
+<p><img src="/parametric-nowcasting/70-summarise/32-sari-nowcast-per-model_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;sari_nowcast.png&quot;), p,
+       width = 8, height = 6, dpi = 300)</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;  15.811   1.125  18.044</code></pre>
+</div>

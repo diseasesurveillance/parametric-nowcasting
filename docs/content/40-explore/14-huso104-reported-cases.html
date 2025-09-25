@@ -1,0 +1,66 @@
+---
+title: "Exploratory analysis of HusO104 hospitalizations"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+targets:
+    - data/figures/huso104_reported_cases.png
+---
+
+
+
+<div id="load-packages-scripts-and-data" class="section level2">
+<h2>Load packages, scripts and data</h2>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>#&gt; 
+#&gt; Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:stats&#39;:
+#&gt; 
+#&gt;     filter, lag</code></pre>
+<pre><code>#&gt; The following objects are masked from &#39;package:base&#39;:
+#&gt; 
+#&gt;     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyr)
+library(ggplot2)
+library(latex2exp)
+
+path_proj &lt;- here::here()
+path_src &lt;- file.path(path_proj, &quot;src&quot;)
+path_data &lt;- file.path(path_proj, &quot;data&quot;)
+path_cleaned &lt;- file.path(path_data, &quot;cleaned&quot;)
+path_processed &lt;- file.path(path_data, &quot;processed&quot;)
+path_figures &lt;- file.path(path_data, &quot;figures&quot;)
+
+source(file.path(path_src, &quot;20-processing.R&quot;))
+source(file.path(path_src, &quot;30-eda.R&quot;))
+
+huso &lt;- readRDS(file.path(path_processed, &quot;huso104_20110512_20110606.rds&quot;))</code></pre>
+</div>
+<div id="convert-to-long-format" class="section level2">
+<h2>Convert to long format</h2>
+<p>Convert data to long format and filter with observed data by the last available date.</p>
+<pre class="r"><code>huso_long &lt;- huso |&gt;
+    mutate(available_delay = seq(n()-1, 0)) |&gt;
+    reporcases_longer() |&gt;
+    filter(delay &lt;= available_delay)</code></pre>
+</div>
+<div id="visualize-cumulative-reported-cases" class="section level2">
+<h2>Visualize cumulative reported cases</h2>
+<pre class="r"><code>p &lt;- plot_reported(huso_long, maxdelay = 15) +
+    facet_wrap(~ date, scales = &quot;free_y&quot;, nrow = 5) +
+    labs(x = TeX(&quot;Delay (days)&quot;))
+p</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+<p><img src="/parametric-nowcasting/40-explore/14-huso104-reported-cases_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggsave(file.path(path_figures, &quot;huso104_reported_cases.png&quot;), p,
+       width = 8, height = 5, dpi = 300)</code></pre>
+<pre><code>#&gt; `geom_line()`: Each group consists of only one observation.
+#&gt; ℹ Do you need to adjust the group aesthetic?</code></pre>
+</div>
+<div id="time-to-execute-the-task" class="section level2">
+<h2>Time to execute the task</h2>
+<p>Only useful when executed with <code>Rscript</code>.</p>
+<pre class="r"><code>proc.time()</code></pre>
+<pre><code>#&gt;    user  system elapsed 
+#&gt;   2.583   0.317   2.654</code></pre>
+</div>

@@ -1,0 +1,28 @@
+baseURL = "https://erickchacon.gitlab.io/parametric-nowcasting/"
+title = "Parametric nowcasting"
+theme = ["github.com/ErickChacon/scholar-docs"]
+languageCode = "en-uk"
+ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
+preserveTaxonomyNames = true
+footnotereturnlinkcontents = "↩"
+summaryLength = 40
+
+[params]
+    sidebar = true
+
+[params.social]
+    envelope = "mailto:erick.chaconmontalvan@kaust.edu.sa"
+    github = "https://github.com/ErickChacon"
+    gitlab = "https://gitlab.com/ErickChacon"
+    twitter = "https://twitter.com/ErickChaconMon"
+    linkedin = "https://www.linkedin.com/in/erick-chacon-montalvan-7bba9141"
+
+[[menu.main]]
+    name = "ORCID"
+    url = "https://orcid.org/0000-0001-8068-1034"
+    weight = 10
+[[menu.main]]
+    name = "Erick Chacón"
+    url = "https://erickchacon.gitlab.io/"
+    weight = 20
+

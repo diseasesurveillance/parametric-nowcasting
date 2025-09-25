@@ -1,0 +1,114 @@
+---
+title: "HusO104: Visualize nowcasting results by reference date with OU model"
+prerequisites:
+    - data/processed/huso104_20110512_20110606.rds
+    - data/modelled/huso104_20110512_20110606_mcmc.rds
+targets:
+    - data/figures/huso104_nowcast_ou_95.png
+    - data/figures/huso104_nowcast_ou_70.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cmdstanr)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_processed <- file.path(path_data, "processed")
+path_modelled <- file.path(path_data, "modelled")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+source(file.path(path_src, "50-modelling.R"))
+source(file.path(path_src, "60-summarise.R"))
+
+huso <- readRDS(file.path(path_processed, "huso104_20110512_20110606.rds"))
+huso_mcmc <- readRDS(file.path(path_modelled, "huso104_20110512_20110606_mcmc.rds"))
+names(huso_mcmc)
+```
+
+## Processing results
+
+Obtain summarised date for reported cases and baseline cases, and summarise the nowcasting
+results from the mcmc samples at 95% and 70% credible level.
+
+```{r}
+# empirical summaries
+huso_summary <- reporcases_periods(huso, names(huso_mcmc))
+huso_summary
+
+# vertical windows per date
+huso_aux <- tibble(date_end = names(huso_mcmc)) |>
+    mutate(reference = as.Date(date_end) - lubridate::days(15))
+
+# nowcasting
+huso_nowcast_95 <- nowcast_periods(huso_mcmc, date_by = "1 day", alpha = 0.05) |>
+    filter(model == "gom_ou")
+huso_nowcast_95
+
+huso_nowcast_70 <- nowcast_periods(huso_mcmc, date_by = "1 day", alpha = 0.3) |>
+    filter(model == "gom_ou")
+huso_nowcast_70
+
+huso_nowcast_50 <- nowcast_periods(huso_mcmc, date_by = "1 day", alpha = 0.5) |>
+    filter(model == "gom_ou")
+huso_nowcast_50
+```
+
+## Visualize nowcasting per reference date 95%
+
+```{r, fig.height = 4}
+p <- plot_nowcast(huso_nowcast_95, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = "gray50") +
+    theme(legend.position = c(0.88, 0.24))
+p
+
+ggsave(file.path(path_figures, "huso104_nowcast_ou_95.png"), p,
+       width = 8, height = 4, dpi = 300)
+```
+
+## Visualize nowcasting per reference date 70%
+
+```{r, fig.height = 4}
+p <- plot_nowcast(huso_nowcast_70, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = "gray50") +
+    theme(legend.position = c(0.88, 0.24))
+p
+
+ggsave(file.path(path_figures, "huso104_nowcast_ou_70.png"), p,
+       width = 8, height = 4, dpi = 300)
+```
+
+## Visualize nowcasting per reference date 50%
+
+```{r, fig.height = 4}
+p <- plot_nowcast(huso_nowcast_50, huso_summary, by_model = FALSE) +
+    geom_vline(aes(xintercept = reference), huso_aux, linetype = 2, color = "gray50") +
+    theme(legend.position = c(0.88, 0.24))
+p
+
+ggsave(file.path(path_figures, "huso104_nowcast_ou_50.png"), p,
+       width = 8, height = 4, dpi = 300)
+```
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+

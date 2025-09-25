@@ -1,0 +1,79 @@
+---
+title: "SARI: Visualize nowcasting results by model and reference date"
+prerequisites:
+    - data/processed/sari_41002_20090614_20091122.rds
+    - data/modelled/sari_41002_20090614_20091122_mcmc.rds
+targets:
+    - data/figures/sari_nowcast.png
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = "100%")
+knitr::opts_chunk$set(comment = "#>")
+options(width = 100)
+```
+
+## Load packages, scripts and data
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cmdstanr)
+
+path_proj <- here::here()
+path_src <- file.path(path_proj, "src")
+path_data <- file.path(path_proj, "data")
+path_processed <- file.path(path_data, "processed")
+path_modelled <- file.path(path_data, "modelled")
+path_figures <- file.path(path_data, "figures")
+
+source(file.path(path_src, "20-processing.R"))
+source(file.path(path_src, "30-eda.R"))
+source(file.path(path_src, "50-modelling.R"))
+source(file.path(path_src, "60-summarise.R"))
+
+sari <- readRDS(file.path(path_processed, "sari_41002_20090614_20091122.rds"))
+sari_mcmc <- readRDS(file.path(path_modelled, "sari_41002_20090614_20091122_mcmc.rds"))
+names(sari_mcmc)
+```
+
+## Processing results
+
+Obtain summarised date for reported cases and baseline cases, and summarise the nowcasting
+results from the mcmc samples.
+
+```{r}
+sari_summary <- reporcases_periods(sari, names(sari_mcmc))
+sari_summary
+
+sari_nowcast <- nowcast_periods(sari_mcmc, date_by = "1 week")
+sari_nowcast
+```
+
+## Visualize nowcasting per reference date
+
+```{r}
+model_labels <- c(
+  "nonparam"  = "bold('M1: Non-parametric'~q[d])",
+  "exp"       = "bold('M2: Parametric'~q(d))",
+  "exp_rw1"   = "bold('M3:'~q[t](d)~'with random walks')",
+  "exp_ou"    = "bold('M4:'~q[t](d)~'with OU processes')"
+)
+p <- plot_nowcast(sari_nowcast, sari_summary, model_labels = model_labels)
+p
+
+ggsave(file.path(path_figures, "sari_nowcast.png"), p,
+       width = 8, height = 6, dpi = 300)
+```
+
+
+## Time to execute the task
+
+Only useful when executed with `Rscript`.
+
+```{r}
+proc.time()
+```
+
